@@ -1,0 +1,218 @@
+import sys
+
+sys.setrecursionlimit(2000)
+
+
+class Nest:
+    """Класс для представления гнезда"""
+
+    def __init__(self):
+        self.nest_letters = 0  # количество писем в этом гнезде
+        self.branch_letters = 0  # количество писем в ветке (включая поддеревья)
+        self.neighbourhood = []  # список соседей
+        self.visited = False  # флаг посещения при обходе
+
+
+def calc_letters(nests, nest_number):
+    """
+    Рекурсивный подсчет писем в поддеревьях.
+    Заполняет поле branch_letters для каждого гнезда.
+    """
+    nest = nests[nest_number]
+    nest.visited = True
+
+    # Сначала в branch_letters записываем письма текущего гнезда
+    nest.branch_letters = nest.nest_letters
+
+    # Обходим всех соседей
+    for neighbour_id in nest.neighbourhood:
+        if not nests[neighbour_id].visited:
+            calc_letters(nests, neighbour_id)
+            # Добавляем письма из поддерева соседа
+            nest.branch_letters += nests[neighbour_id].branch_letters
+
+
+def pardon_count(nests, nest_number):
+    """
+    Рекурсивный подсчет извинений.
+    Возвращает количество извинений в поддереве.
+    """
+    nest = nests[nest_number]
+
+    pardons = 0
+
+    # Помечаем как посещенное для этого обхода
+    nest.visited = True
+
+    # Если в текущем гнезде нет писем - извиняемся
+    if nest.nest_letters <= 0:
+        pardons += 1
+    else:
+        # Если письма есть - забираем одно (как бы оставляем жильцам)
+        nest.nest_letters -= 1
+
+    # Обходим всех соседей
+    for neighbour_id in nest.neighbourhood:
+        # Если в ветке соседа нет писем - пропускаем (не идем туда)
+        if nests[neighbour_id].branch_letters <= 0:
+            continue
+
+        # Если сосед еще не посещен в этом обходе
+        if not nests[neighbour_id].visited:
+            # Рекурсивно считаем извинения в поддереве соседа
+            pardons += pardon_count(nests, neighbour_id)
+
+            # При возврате из соседа:
+            # Если в текущем гнезде больше нет писем - извиняемся
+            if nest.nest_letters <= 0:
+                pardons += 1
+            else:
+                # Если письма есть - забираем одно
+                nest.nest_letters -= 1
+
+    return pardons
+
+
+def solve_from_file(filename):
+    """
+    Основная функция решения задачи из файла.
+    """
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        print(f"Ошибка: Файл '{filename}' не найден.")
+        return None
+    except Exception as e:
+        print(f"Ошибка при чтении файла: {e}")
+        return None
+
+    # Удаляем пустые строки
+    lines = [line.strip() for line in lines if line.strip()]
+
+    if not lines:
+        print("Ошибка: Файл пуст.")
+        return None
+
+    try:
+        n = int(lines[0])
+    except ValueError:
+        print("Ошибка: Первая строка должна содержать целое число.")
+        return None
+
+    if n <= 0 or n >= 1000:
+        print("Ошибка: M должно быть в диапазоне 0 < M < 1000.")
+        return None
+
+    # Создаем список гнезд
+    nests = [Nest() for _ in range(n)]
+
+    # Читаем данные для каждого гнезда
+    for i in range(n):
+        line_index = i + 1
+        if line_index >= len(lines):
+            print(f"Ошибка: Недостаточно данных для гнезда {i + 1}.")
+            return None
+
+        parts = lines[line_index].split()
+        if len(parts) < 2:
+            print(f"Ошибка: Неверный формат для гнезда {i + 1}.")
+            return None
+
+        try:
+            neighbourhood_count = int(parts[0])
+            nest_letters = int(parts[1])
+        except ValueError:
+            print(f"Ошибка: Количество соседей и писем должны быть числами.")
+            return None
+
+        nests[i].nest_letters = nest_letters
+        nests[i].neighbourhood = []
+
+        # Читаем соседей
+        for j in range(2, min(2 + neighbourhood_count, len(parts))):
+            try:
+                neighbour = int(parts[j]) - 1  # переводим в 0-индексацию
+                nests[i].neighbourhood.append(neighbour)
+            except ValueError:
+                print(f"Ошибка: Номер соседа должен быть числом.")
+                return None
+
+    # Проверка: все ли соседи существуют в пределах от 0 до n-1
+    for i, nest in enumerate(nests):
+        for neighbour in nest.neighbourhood:
+            if neighbour < 0 or neighbour >= n:
+                print(f"Ошибка: Гнездо {i + 1} ссылается на несуществующее гнездо {neighbour + 1}.")
+                return None
+
+    # Шаг 1: вычисляем branch_letters (письма в поддеревьях)
+    # Сбрасываем флаги visited перед первым обходом
+    for nest in nests:
+        nest.visited = False
+
+    calc_letters(nests, 0)  # начинаем с гнезда 0 (это гнездо 1 в 1-индексации)
+
+    # Шаг 2: сбрасываем флаги visited перед подсчетом извинений
+    for nest in nests:
+        nest.visited = False
+
+    # Шаг 3: считаем извинения
+    result = pardon_count(nests, 0)
+
+    return result
+
+
+def main():
+    """Главная функция с циклическим меню"""
+    while True:
+        print("\n" + "=" * 50)
+        print("  Мудрый тритон - доставка почты в Лукоморье")
+        print("=" * 50)
+        print("1. Загрузить данные из файла и решить задачу")
+        print("2. Использовать пример из условия")
+        print("3. Выход")
+        print("=" * 50)
+
+        choice = input("Выберите пункт (1-3): ").strip()
+
+        if choice == '1':
+            filename = input("Введите имя файла: ").strip()
+            if not filename:
+                print("Ошибка: Имя файла не может быть пустым.")
+                continue
+
+            result = solve_from_file(filename)
+            if result is not None:
+                print(f"\n{'=' * 40}")
+                print(f"РЕЗУЛЬТАТ: Минимальное количество извинений = {result}")
+                print(f"{'=' * 40}")
+
+        elif choice == '2':
+            # Создаем временный файл с примером из условия
+            example_data = "5\n3 2 2 5 4\n1 1 1\n1 1 4\n2 2 3 1\n1 3 1"
+            temp_file = "example_input.txt"
+            try:
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    f.write(example_data)
+                print("\nЗагружен пример из условия:")
+                print(example_data)
+                result = solve_from_file(temp_file)
+                if result is not None:
+                    print(f"\n{'=' * 40}")
+                    print(f"РЕЗУЛЬТАТ: Минимальное количество извинений = {result}")
+                    print(f"{'=' * 40}")
+            except Exception as e:
+                print(f"Ошибка: {e}")
+
+        elif choice == '3':
+            print("До свидания! Спасибо за использование программы.")
+            break
+
+        else:
+            print("Ошибка: Неверный пункт. Введите 1, 2 или 3.")
+
+        input("\nНажмите Enter, чтобы продолжить...")
+
+
+if __name__ == "__main__":
+    main()
