@@ -158,7 +158,13 @@ def solve_from_file(filename):
 
     # Шаг 3: считаем извинения
     result = pardon_count(nests, 0)
-
+    # Запись в выходной файл (добавить в конец функции solve_from_file)
+    try:
+        with open("output.txt", 'w', encoding='utf-8') as f:
+            f.write(str(result))
+        print(f"Результат записан в файл 'output.txt'")
+    except Exception as e:
+        print(f"Ошибка при записи в выходной файл: {e}")
     return result
 
 
